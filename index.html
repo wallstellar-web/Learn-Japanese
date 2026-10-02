@@ -69,9 +69,10 @@ h3{ font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; color:var(-
 <details class="hint" id="set"><summary>⚙︎ Settings: enable kanji &amp; English lookup</summary>
 <p>Kana words and the built-in word bank work fully offline. For any kanji or English word, paste your own Anthropic API key (stored only on this device).</p>
 <div class="row"><input class="search" id="key" type="password" placeholder="sk-ant-…" autocomplete="off"><button class="btn" id="savekey">Save</button></div></details>
-<p class="hint">Press Look up for any word. Typing also filters the word bank below. Tap a word to hear it.</p>
+<p class="hint">Type an English word and press Look up to get the Japanese word with pronunciation, then tap Save to keep it. Press Look up for any word. Typing also filters the word bank below. Tap a word to hear it.</p>
 <div class="res" id="res"></div>
 <h3>Word bank</h3>
+<div class="row" style="margin-bottom:.4rem"><button class="btn" id="loadf">Load next 100 top words</button></div><div class="status" id="fstat"></div>
 <div class="nav" id="nav"></div>
 <div id="content"></div>
 </div>
@@ -306,10 +307,10 @@ function speak(t){
 
 /* ---------- Result cards ---------- */
 function esc(s){ var d=document.createElement("div"); d.textContent=s==null?"":String(s); return d.innerHTML; }
-function card(e){
+function card(e,i){
   var p=pron(e.kana||"")||{rom:"",say:""};
   var showKana=e.kana&&e.kana!==e.word;
-  var h='<div class="card"><button class="spk" data-say="'+esc(e.kana||e.word)+'">🔊 Play</button>'
+  var h='<div class="card"><button class="spk" data-say="'+esc(e.kana||e.word)+'">🔊 Play</button>'+(i!==undefined&&e.meaning?'<button class="spk" style="margin-right:.4rem" data-save="'+i+'">＋ Save</button>':'')
    +'<div class="big">'+esc(e.word)+'</div>'
    +(showKana?'<div class="kana">'+esc(e.kana)+'</div>':'')
    +(p.rom?'<div class="rom">'+esc(p.rom)+'</div><div class="say">Say it: <b>'+esc(p.say)+'</b></div>':'')
@@ -324,15 +325,26 @@ function card(e){
   return h+'</div>';
 }
 var res=document.getElementById("res");
-res.addEventListener("click",function(ev){ var b=ev.target.closest("[data-say]"); if(b) speak(b.getAttribute("data-say")); });
+res.addEventListener("click",function(ev){
+  var sb=ev.target.closest("[data-save]");
+  if(sb){ var e=LAST[+sb.getAttribute("data-save")]; if(e&&!MY.some(function(m){return m.word===e.word;})){ MY.push({word:e.word,kana:e.kana||e.word,meaning:e.meaning}); sv("mywords",MY); renderBank(""); } sb.textContent="Saved ✓"; return; } var b=ev.target.closest("[data-say]"); if(b) speak(b.getAttribute("data-say")); });
 
-var reqId=0;
+var reqId=0, LAST=[];
+function ld(k){ try{ return JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){ return []; } }
+function sv(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+var MY=ld("mywords"), FREQ=ld("freq");
+function allCats(){
+  var c=DATA.slice();
+  if(MY.length) c.push(["★ My words ("+MY.length+")",MY.map(function(w){return [w.word,w.kana,w.meaning];})]);
+  if(FREQ.length) c.push(["Top 2000 words ("+FREQ.length+"/2000)",FREQ.map(function(w){return [w.word,w.kana,w.meaning];})]);
+  return c;
+}
 function getKey(){ try{ return localStorage.getItem("akey")||""; }catch(e){ return ""; } }
 function getSample(){
   var k=getKey(); if(!k) return Promise.resolve(null);
   return Promise.resolve({json:async function(p){
     var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1500,messages:[{role:"user",content:p}]})});
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:4500,messages:[{role:"user",content:p}]})});
     if(r.status===401) throw {code:"bad_key"};
     if(r.status===429) throw {code:"rate_limited"};
     if(!r.ok) throw {code:"http"};
@@ -342,7 +354,7 @@ function getSample(){
 }
 function bankMatches(q){
   var l=q.toLowerCase(), o=[];
-  DATA.forEach(function(c){ c[1].forEach(function(w){ if(w[0]===q||w[1]===toHira(q)||w[2].toLowerCase().split(/[,;] ?/).indexOf(l)!==-1) o.push({word:w[0],kana:w[1],meaning:w[2]}); }); });
+  allCats().forEach(function(c){ c[1].forEach(function(w){ if(w[0]===q||w[1]===toHira(q)||w[2].toLowerCase().split(/[,;] ?/).indexOf(l)!==-1) o.push({word:w[0],kana:w[1],meaning:w[2]}); }); });
   return o.slice(0,4);
 }
 document.getElementById("key").value=getKey();
@@ -358,7 +370,7 @@ async function lookup(){
   if(isKana(q)){
     local=bankFind(q);
     html=card({word:q,kana:q,meaning:local?local[2]:"",pos:""});
-  } else { html=bm.map(card).join(""); }
+  } else { LAST=bm; html=bm.map(card).join(""); }
   res.innerHTML=html+'<div class="status">Looking up "'+esc(q)+'"…</div>';
   var sample=await getSample();
   if(id!==reqId) return;
@@ -374,7 +386,7 @@ async function lookup(){
     if(id!==reqId) return;
     var list=(r&&r.results)||[];
     if(!list.length) throw new Error("empty");
-    res.innerHTML=list.map(card).join("");
+    LAST=list; res.innerHTML=list.map(card).join("");
   }catch(err){
     if(id!==reqId) return;
     var msg=(err&&err.code==="bad_key")?'API key was rejected. Check it in Settings.':(err&&err.code==="rate_limited")?'Too many lookups. Wait a moment and try again.':'Could not complete the lookup. Try again.';
@@ -387,13 +399,13 @@ document.getElementById("q").addEventListener("input",function(e){ renderBank(e.
 
 /* ---------- Word bank ---------- */
 function bankFind(q){
-  for(var i=0;i<DATA.length;i++) for(var j=0;j<DATA[i][1].length;j++){ var w=DATA[i][1][j]; if(w[0]===q||w[1]===toHira(q)) return w; }
+  var A=allCats(); for(var i=0;i<A.length;i++) for(var j=0;j<A[i][1].length;j++){ var w=A[i][1][j]; if(w[0]===q||w[1]===toHira(q)) return w; }
   return null;
 }
 function renderBank(filter){
   var root=document.getElementById("content"), nav=document.getElementById("nav");
   root.innerHTML=""; nav.innerHTML=""; var shown=0;
-  DATA.forEach(function(cat,idx){
+  allCats().forEach(function(cat,idx){
     var words=cat[1].filter(function(w){
       if(!filter) return true;
       var p=pron(w[1]); return (w[0]+w[1]+w[2]+(p?p.rom:"")).toLowerCase().indexOf(filter)!==-1;
@@ -416,6 +428,21 @@ function renderBank(filter){
 }
 document.getElementById("content").addEventListener("click",function(ev){ var b=ev.target.closest("[data-say]"); if(b) speak(b.getAttribute("data-say")); });
 renderBank("");
+document.getElementById("loadf").addEventListener("click",async function(){
+  var st=document.getElementById("fstat"), b=this;
+  if(FREQ.length>=2000){ st.textContent="All 2000 loaded."; return; }
+  var sample=await getSample();
+  if(!sample){ st.textContent="Add your API key in Settings to load words (needs internet once; saved offline after)."; return; }
+  b.disabled=true; st.textContent="Loading words "+(FREQ.length+1)+" to "+(FREQ.length+100)+"…";
+  try{
+    var n=FREQ.length;
+    var r=await sample.json('List the Japanese words ranked about '+(n+1)+' to '+(n+100)+' in a frequency list of everyday modern Japanese (no proper nouns, no duplicates of earlier ranks). Return ONLY JSON: {"words":[{"word":"as normally written","kana":"accurate reading in kana only","meaning":"short English meaning"}]} with about 100 items.');
+    var seen={}; allCats().forEach(function(c){ c[1].forEach(function(w){ seen[w[0]]=1; }); });
+    (r.words||[]).forEach(function(w){ if(w&&w.word&&w.kana&&!seen[w.word]){ seen[w.word]=1; FREQ.push({word:w.word,kana:w.kana,meaning:w.meaning||""}); } });
+    sv("freq",FREQ); renderBank(""); st.textContent=FREQ.length+" / 2000 loaded. Tap again for the next 100.";
+  }catch(e){ st.textContent=(e&&e.code==="bad_key")?"API key rejected. Check Settings.":"Could not load. Check your connection and try again."; }
+  b.disabled=false;
+});
 </script>
 </body>
 </html>

@@ -1,0 +1,1 @@
+{"name": "Japanese Learner", "short_name": "\u65e5\u672c\u8a9e", "start_url": "./index.html", "display": "standalone", "background_color": "#F5EEE0", "theme_color": "#BC002D", "icons": [{"src": "icon-180.png", "sizes": "180x180", "type": "image/png"}, {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}]}

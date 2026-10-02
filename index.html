@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="日本語">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#BC002D">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<title>Japanese Learner: Look up any word</title>
+<style>
+:root{
+  box-sizing:border-box;
+  --paper:#F5EEE0; --card:#FFFFFF; --ink:#221D15; --muted:#6E6656; --shu:#BC002D; --line:#DED2B7; --soft:#FBF6EA;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --paper:#16130E; --card:#211C14; --ink:#EFE7D6; --muted:#A89C82; --line:#3A3122; --shu:#E14B5F; --soft:#1B1710; }
+}
+:root[data-theme="dark"]{ --paper:#16130E; --card:#211C14; --ink:#EFE7D6; --muted:#A89C82; --line:#3A3122; --shu:#E14B5F; --soft:#1B1710; }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+body{ margin:0; background:var(--paper); color:var(--ink); font-family:'Zen Kaku Gothic New','Hiragino Sans','Yu Gothic',sans-serif; line-height:1.5; -webkit-font-smoothing:antialiased; }
+.wrap{ max-width:640px; margin:0 auto; padding:1.5rem 1.1rem 3rem; }
+h1{ font-size:1.5rem; font-weight:900; margin:0 0 .3rem; }
+.sub{ color:var(--muted); font-size:.9rem; margin:0 0 1rem; }
+.row{ display:flex; gap:.5rem; }
+.search{ flex:1; min-width:0; padding:.75rem .9rem; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); font:inherit; font-size:1rem; }
+.search:focus-visible,.btn:focus-visible{ outline:2px solid var(--shu); outline-offset:1px; }
+.btn{ padding:.7rem 1rem; border:0; border-radius:8px; background:var(--shu); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+.hint{ font-size:.78rem; color:var(--muted); margin:.5rem 0 1rem; }
+.res{ margin-bottom:1.4rem; }
+.card{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.9rem 1rem; margin-bottom:.6rem; }
+.card .big{ font-size:1.7rem; font-weight:900; line-height:1.2; }
+.kana{ color:var(--muted); font-size:.95rem; }
+.rom{ font-size:1.05rem; font-weight:700; color:var(--shu); margin-top:.15rem; }
+.say{ font-size:.95rem; margin-top:.1rem; }
+.say b{ letter-spacing:.02em; }
+.mean{ margin-top:.35rem; }
+.ex{ margin-top:.5rem; padding-top:.5rem; border-top:1px dashed var(--line); font-size:.88rem; color:var(--muted); }
+.ex .j{ color:var(--ink); font-weight:500; }
+.spk{ float:right; border:1px solid var(--line); background:var(--soft); color:var(--ink); border-radius:999px; padding:.3rem .7rem; font:inherit; font-size:.8rem; cursor:pointer; }
+.status{ font-size:.88rem; color:var(--muted); padding:.5rem 0; }
+.nav{ display:flex; gap:.4rem; overflow-x:auto; padding-bottom:.5rem; margin:1rem 0; }
+.chip{ flex:0 0 auto; padding:.35rem .75rem; border:1px solid var(--line); border-radius:999px; font-size:.76rem; color:var(--muted); text-decoration:none; white-space:nowrap; }
+.cat h2{ font-size:1rem; font-weight:700; margin:1.2rem 0 .5rem; padding-bottom:.35rem; border-bottom:2px solid var(--shu); }
+.w{ display:flex; gap:.6rem; justify-content:space-between; align-items:flex-start; padding:.55rem .1rem; border-bottom:1px solid var(--line); cursor:pointer; }
+.w .l{ min-width:0; }
+.w .jp{ font-weight:700; font-size:1.05rem; }
+.w .r{ font-size:.82rem; color:var(--muted); }
+.w .p{ font-size:.85rem; color:var(--shu); font-weight:700; }
+.w .m{ font-size:.85rem; text-align:right; max-width:42%; }
+h3{ font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 .4rem; }
+@media (prefers-reduced-motion: reduce){ *{ transition:none!important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>📔 Japanese learner</h1>
+<p class="sub">Search any Japanese word (kanji, hiragana, katakana) or an English word. See the reading, English pronunciation, meaning and an example.</p>
+<div class="row">
+  <input class="search" id="q" type="search" placeholder="e.g. 会議, ありがとう, コーヒー, or &quot;friend&quot;" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button class="btn" id="go">Look up</button>
+</div>
+<details class="hint" id="set"><summary>⚙︎ Settings: enable kanji &amp; English lookup</summary>
+<p>Kana words and the built-in word bank work fully offline. For any kanji or English word, paste your own Anthropic API key (stored only on this device).</p>
+<div class="row"><input class="search" id="key" type="password" placeholder="sk-ant-…" autocomplete="off"><button class="btn" id="savekey">Save</button></div></details>
+<p class="hint">Press Look up for any word. Typing also filters the word bank below. Tap a word to hear it.</p>
+<div class="res" id="res"></div>
+<h3>Word bank</h3>
+<div class="nav" id="nav"></div>
+<div id="content"></div>
+</div>
+<script>
+var DATA = [
+["Work greetings & phrases",[
+["おはようございます","おはようございます","good morning (polite)"],
+["お疲れ様です","おつかれさまです","thanks for your hard work"],
+["お疲れ様でした","おつかれさまでした","good work today"],
+["お先に失礼します","おさきにしつれいします","excuse me for leaving first"],
+["よろしくお願いします","よろしくおねがいします","please treat me well"],
+["ありがとうございます","ありがとうございます","thank you"],
+["すみません","すみません","excuse me, sorry"],
+["申し訳ございません","もうしわけございません","I'm very sorry (formal)"],
+["失礼します","しつれいします","excuse me (entering/leaving)"],
+["承知しました","しょうちしました","understood (business)"],
+["かしこまりました","かしこまりました","certainly, understood"],
+["お世話になっております","おせわになっております","thank you for your support"],
+["はじめまして","はじめまして","nice to meet you"],
+["お元気ですか","おげんきですか","how are you?"],
+["大丈夫です","だいじょうぶです","it's fine, no problem"],
+["かまいません","かまいません","I don't mind, that's fine"]
+]],
+["Work & office",[
+["会社","かいしゃ","company"],
+["仕事","しごと","work, job"],
+["会議","かいぎ","meeting"],
+["資料","しりょう","materials, documents"],
+["メール","めーる","email"],
+["電話","でんわ","phone, phone call"],
+["予定","よてい","schedule, plan"],
+["締め切り","しめきり","deadline"],
+["出張","しゅっちょう","business trip"],
+["休み","やすみ","day off, break"],
+["給料","きゅうりょう","salary"],
+["契約","けいやく","contract"],
+["報告","ほうこく","report"],
+["相談","そうだん","consultation"],
+["プロジェクト","ぷろじぇくと","project"],
+["部署","ぶしょ","department"],
+["名刺","めいし","business card"],
+["書類","しょるい","documents"],
+["印刷","いんさつ","printing"],
+["確認","かくにん","confirmation, check"]
+]],
+["Time & dates",[
+["今日","きょう","today"],
+["明日","あした","tomorrow"],
+["昨日","きのう","yesterday"],
+["今","いま","now"],
+["時間","じかん","time"],
+["分","ふん","minute"],
+["時","じ","o'clock"],
+["今週","こんしゅう","this week"],
+["来週","らいしゅう","next week"],
+["先週","せんしゅう","last week"],
+["今月","こんげつ","this month"],
+["毎日","まいにち","every day"],
+["朝","あさ","morning"],
+["昼","ひる","noon, daytime"],
+["夜","よる","night"],
+["午前","ごぜん","AM"],
+["午後","ごご","PM"]
+]],
+["People",[
+["私","わたし","I, me"],
+["あなた","あなた","you"],
+["家族","かぞく","family"],
+["友達","ともだち","friend"],
+["同僚","どうりょう","coworker"],
+["上司","じょうし","boss"],
+["部下","ぶか","subordinate"],
+["お客様","おきゃくさま","customer, guest"],
+["先生","せんせい","teacher"],
+["子供","こども","child"]
+]],
+["Common verbs",[
+["行く","いく","to go"],
+["来る","くる","to come"],
+["帰る","かえる","to go home"],
+["食べる","たべる","to eat"],
+["飲む","のむ","to drink"],
+["見る","みる","to see, watch"],
+["聞く","きく","to hear, ask"],
+["話す","はなす","to speak"],
+["書く","かく","to write"],
+["読む","よむ","to read"],
+["買う","かう","to buy"],
+["作る","つくる","to make"],
+["使う","つかう","to use"],
+["待つ","まつ","to wait"],
+["会う","あう","to meet"],
+["送る","おくる","to send"],
+["始める","はじめる","to start"],
+["終わる","おわる","to end, finish"],
+["働く","はたらく","to work"],
+["休む","やすむ","to rest, take off"],
+["頑張る","がんばる","to do one's best"],
+["手伝う","てつだう","to help"],
+["連絡する","れんらくする","to contact"],
+["決める","きめる","to decide"],
+["分かる","わかる","to understand"],
+["知る","しる","to know"],
+["教える","おしえる","to teach"],
+["準備する","じゅんびする","to prepare"]
+]],
+["Common adjectives",[
+["いい","いい","good"],
+["悪い","わるい","bad"],
+["大きい","おおきい","big"],
+["小さい","ちいさい","small"],
+["忙しい","いそがしい","busy"],
+["楽しい","たのしい","fun, enjoyable"],
+["難しい","むずかしい","difficult"],
+["簡単な","かんたんな","easy, simple"],
+["大切な","たいせつな","important"],
+["便利な","べんりな","convenient"],
+["早い","はやい","early, fast"],
+["遅い","おそい","late, slow"],
+["新しい","あたらしい","new"],
+["古い","ふるい","old"],
+["高い","たかい","expensive, high"],
+["安い","やすい","cheap"],
+["大変な","たいへんな","tough, hard"]
+]],
+["Daily life & places",[
+["家","いえ","house, home"],
+["駅","えき","station"],
+["電車","でんしゃ","train"],
+["バス","ばす","bus"],
+["車","くるま","car"],
+["スーパー","すーぱー","supermarket"],
+["コンビニ","こんびに","convenience store"],
+["レストラン","れすとらん","restaurant"],
+["病院","びょういん","hospital"],
+["銀行","ぎんこう","bank"],
+["お金","おかね","money"],
+["買い物","かいもの","shopping"],
+["食事","しょくじ","meal"],
+["天気","てんき","weather"],
+["携帯電話","けいたいでんわ","mobile phone"]
+]],
+["Connectors",[
+["でも","でも","but"],
+["そして","そして","and then"],
+["だから","だから","so, therefore"],
+["もし","もし","if"],
+["また","また","again, also"],
+["ちょっと","ちょっと","a little, hold on"],
+["もう","もう","already"],
+["まだ","まだ","still, not yet"],
+["とても","とても","very"],
+["一緒に","いっしょに","together"]
+]]
+];
+
+/* ---------- Kana -> romaji + English respelling ---------- */
+var MAP = {};
+(function(){
+  var sets = [
+    ["あいうえお","a i u e o"],["かきくけこ","ka ki ku ke ko"],["さしすせそ","sa shi su se so"],
+    ["たちつてと","ta chi tsu te to"],["なにぬねの","na ni nu ne no"],["はひふへほ","ha hi fu he ho"],
+    ["まみむめも","ma mi mu me mo"],["らりるれろ","ra ri ru re ro"],["がぎぐげご","ga gi gu ge go"],
+    ["ざじずぜぞ","za ji zu ze zo"],["だぢづでど","da ji zu de do"],["ばびぶべぼ","ba bi bu be bo"],
+    ["ぱぴぷぺぽ","pa pi pu pe po"],["やゆよ","ya yu yo"],["わをん","wa o n"],["ゔ","vu"]
+  ];
+  sets.forEach(function(s){ var r=s[1].split(" "); for(var i=0;i<s[0].length;i++) MAP[s[0][i]]=r[i]; });
+})();
+var V = {a:"ah",i:"ee",u:"oo",e:"eh",o:"oh"};
+function toHira(s){ return s.replace(/[\u30a1-\u30f6]/g,function(c){ return String.fromCharCode(c.charCodeAt(0)-0x60); }); }
+function isKana(s){ return /^[\u3041-\u309f\u30a0-\u30ff\u30fc\s・、。]+$/.test(s); }
+function moras(s){
+  var out=[], gem=false, t=toHira(s);
+  for(var i=0;i<t.length;i++){
+    var c=t[i], last=out.length-1;
+    if(c==="っ"){ gem=true; continue; }
+    if(c==="ー"){ if(last>=0) out.push("~"); continue; }
+    if(/[ゃゅょ]/.test(c) && last>=0){
+      var v={"ゃ":"a","ゅ":"u","ょ":"o"}[c], p=out[last], b=p.slice(0,-1);
+      out[last]=/(sh|ch|j)$/.test(b)?b+v:b+"y"+v; continue;
+    }
+    if(/[ぁぃぅぇぉ]/.test(c) && last>=0){
+      var v2={"ぁ":"a","ぃ":"i","ぅ":"u","ぇ":"e","ぉ":"o"}[c], p2=out[last], b2=p2.slice(0,-1);
+      if(p2==="u") b2="w";
+      out[last]=b2+v2; continue;
+    }
+    if(MAP[c]){ var m=MAP[c]; if(gem){ m=(m.indexOf("ch")===0?"t":m[0])+m; gem=false; } out.push(m); continue; }
+    if(c===" "||c==="　"||c==="・"){ out.push(" "); continue; }
+    if(c==="、"||c==="。") continue;
+    return null;
+  }
+  return out;
+}
+function romaji(ms){
+  var r=[];
+  ms.forEach(function(m){
+    if(m==="~"){ r.push("~"); return; }
+    r.push(m);
+  });
+  var s=r.join("");
+  s=s.replace(/ou/g,"ō").replace(/uu/g,"ū").replace(/oo/g,"ō");
+  s=s.replace(/([aiueo])~/g,function(_,v){ return {a:"ā",i:"ī",u:"ū",e:"ē",o:"ō"}[v]; }).replace(/~/g,"");
+  return s;
+}
+function respell(ms){
+  var sy=[];
+  for(var i=0;i<ms.length;i++){
+    var m=ms[i];
+    if(m===" "){ sy.push(" "); continue; }
+    if(m==="~"){ continue; }
+    if(m==="n"){ if(sy.length&&sy[sy.length-1]!==" ") sy[sy.length-1]+="n"; else sy.push("n"); continue; }
+    var v=m[m.length-1], head=m.slice(0,-1), nx=ms[i+1];
+    if(v==="e" && nx==="i"){ sy.push(head+"ay"); i++; continue; }
+    if(v==="o" && nx==="u"){ sy.push(head+"oh"); i++; continue; }
+    if(v==="u" && nx==="u"){ sy.push(head+"oo"); i++; continue; }
+    sy.push(head+(V[v]||v)+(nx==="~"?"":""));
+  }
+  return sy.join("-").replace(/- -/g,"  ").replace(/- /g," ").replace(/ -/g," ");
+}
+function pron(kana){
+  var ms=moras(kana); if(!ms) return null;
+  return {rom:romaji(ms), say:respell(ms)};
+}
+
+/* ---------- Speech ---------- */
+function speak(t){
+  try{
+    var u=new SpeechSynthesisUtterance(t); u.lang="ja-JP"; u.rate=.85;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ---------- Result cards ---------- */
+function esc(s){ var d=document.createElement("div"); d.textContent=s==null?"":String(s); return d.innerHTML; }
+function card(e){
+  var p=pron(e.kana||"")||{rom:"",say:""};
+  var showKana=e.kana&&e.kana!==e.word;
+  var h='<div class="card"><button class="spk" data-say="'+esc(e.kana||e.word)+'">🔊 Play</button>'
+   +'<div class="big">'+esc(e.word)+'</div>'
+   +(showKana?'<div class="kana">'+esc(e.kana)+'</div>':'')
+   +(p.rom?'<div class="rom">'+esc(p.rom)+'</div><div class="say">Say it: <b>'+esc(p.say)+'</b></div>':'')
+   +(e.meaning?'<div class="mean">'+esc(e.meaning)+(e.pos?' <span class="kana">('+esc(e.pos)+')</span>':'')+'</div>':'');
+  if(e.example&&e.example.jp){
+    var ep=pron(e.example.kana||"");
+    h+='<div class="ex"><div class="j">'+esc(e.example.jp)+'</div>'
+     +(e.example.kana&&e.example.kana!==e.example.jp?'<div>'+esc(e.example.kana)+'</div>':'')
+     +(ep?'<div style="color:var(--shu)">'+esc(ep.rom)+'</div>':'')
+     +'<div>'+esc(e.example.en||"")+'</div></div>';
+  }
+  return h+'</div>';
+}
+var res=document.getElementById("res");
+res.addEventListener("click",function(ev){ var b=ev.target.closest("[data-say]"); if(b) speak(b.getAttribute("data-say")); });
+
+var reqId=0;
+function getKey(){ try{ return localStorage.getItem("akey")||""; }catch(e){ return ""; } }
+function getSample(){
+  var k=getKey(); if(!k) return Promise.resolve(null);
+  return Promise.resolve({json:async function(p){
+    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1500,messages:[{role:"user",content:p}]})});
+    if(r.status===401) throw {code:"bad_key"};
+    if(r.status===429) throw {code:"rate_limited"};
+    if(!r.ok) throw {code:"http"};
+    var d=await r.json(); var t=(d.content||[]).map(function(c){return c.text||"";}).join("").replace(/```json|```/g,"").trim();
+    return JSON.parse(t);
+  }});
+}
+function bankMatches(q){
+  var l=q.toLowerCase(), o=[];
+  DATA.forEach(function(c){ c[1].forEach(function(w){ if(w[0]===q||w[1]===toHira(q)||w[2].toLowerCase().split(/[,;] ?/).indexOf(l)!==-1) o.push({word:w[0],kana:w[1],meaning:w[2]}); }); });
+  return o.slice(0,4);
+}
+document.getElementById("key").value=getKey();
+document.getElementById("savekey").addEventListener("click",function(){ try{ localStorage.setItem("akey",document.getElementById("key").value.trim()); }catch(e){} document.getElementById("set").open=false; });
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});
+
+async function lookup(){
+  var q=document.getElementById("q").value.trim();
+  if(!q){ res.innerHTML=""; return; }
+  var id=++reqId, html="";
+  var local=null;
+  var bm=bankMatches(q);
+  if(isKana(q)){
+    local=bankFind(q);
+    html=card({word:q,kana:q,meaning:local?local[2]:"",pos:""});
+  } else { html=bm.map(card).join(""); }
+  res.innerHTML=html+'<div class="status">Looking up "'+esc(q)+'"…</div>';
+  var sample=await getSample();
+  if(id!==reqId) return;
+  if(!sample){
+    res.innerHTML=html+'<div class="status">'+(local||isKana(q)?'Kana pronunciation is shown above. ':'')+'Full lookup (kanji, English, meanings, examples) needs the Claude connection, which is not available in this view.</div>';
+    return;
+  }
+  try{
+    var prompt='You are a Japanese-English dictionary for learners. The learner typed: "'+q+'".\n'
+     +'If it is Japanese (kanji, kana, or romaji), give the entry for that word (and at most 2 closely related common words). If it is English, give up to 4 common Japanese words for it.\n'
+     +'Return ONLY JSON: {"results":[{"word":"Japanese as normally written","kana":"full reading in hiragana (katakana for loanwords is fine)","meaning":"short English meaning","pos":"part of speech","example":{"jp":"short natural sentence","kana":"its full reading in kana","en":"English translation"}}]}. The kana field must be accurate and contain only kana.';
+    var r=await sample.json(prompt,{modelTier:"quick"});
+    if(id!==reqId) return;
+    var list=(r&&r.results)||[];
+    if(!list.length) throw new Error("empty");
+    res.innerHTML=list.map(card).join("");
+  }catch(err){
+    if(id!==reqId) return;
+    var msg=(err&&err.code==="bad_key")?'API key was rejected. Check it in Settings.':(err&&err.code==="rate_limited")?'Too many lookups. Wait a moment and try again.':'Could not complete the lookup. Try again.';
+    res.innerHTML=html+'<div class="status">'+msg+'</div>';
+  }
+}
+document.getElementById("go").addEventListener("click",lookup);
+document.getElementById("q").addEventListener("keydown",function(e){ if(e.key==="Enter") lookup(); });
+document.getElementById("q").addEventListener("input",function(e){ renderBank(e.target.value.trim().toLowerCase()); });
+
+/* ---------- Word bank ---------- */
+function bankFind(q){
+  for(var i=0;i<DATA.length;i++) for(var j=0;j<DATA[i][1].length;j++){ var w=DATA[i][1][j]; if(w[0]===q||w[1]===toHira(q)) return w; }
+  return null;
+}
+function renderBank(filter){
+  var root=document.getElementById("content"), nav=document.getElementById("nav");
+  root.innerHTML=""; nav.innerHTML=""; var shown=0;
+  DATA.forEach(function(cat,idx){
+    var words=cat[1].filter(function(w){
+      if(!filter) return true;
+      var p=pron(w[1]); return (w[0]+w[1]+w[2]+(p?p.rom:"")).toLowerCase().indexOf(filter)!==-1;
+    });
+    if(!words.length) return;
+    shown+=words.length;
+    var sec=document.createElement("section"); sec.className="cat"; sec.id="cat"+idx;
+    var h='<h2>'+esc(cat[0])+(filter?' ('+words.length+')':'')+'</h2>';
+    words.forEach(function(w){
+      var p=pron(w[1])||{rom:"",say:""};
+      h+='<div class="w" data-say="'+esc(w[1])+'"><div class="l"><div class="jp">'+esc(w[0])+'</div>'
+       +(w[1]!==w[0]?'<div class="r">'+esc(w[1])+'</div>':'')
+       +'<div class="p">'+esc(p.rom)+'</div><div class="r">say: '+esc(p.say)+'</div></div>'
+       +'<div class="m">'+esc(w[2])+'</div></div>';
+    });
+    sec.innerHTML=h; root.appendChild(sec);
+    if(!filter){ var a=document.createElement("a"); a.href="#cat"+idx; a.className="chip"; a.textContent=cat[0]; nav.appendChild(a); }
+  });
+  if(filter&&!shown) root.innerHTML='<p class="status">Not in the word bank. Press Look up to search any word.</p>';
+}
+document.getElementById("content").addEventListener("click",function(ev){ var b=ev.target.closest("[data-say]"); if(b) speak(b.getAttribute("data-say")); });
+renderBank("");
+</script>
+</body>
+</html>
